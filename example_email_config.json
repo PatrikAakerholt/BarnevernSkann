@@ -1,0 +1,10 @@
+{
+    "smtp_server": "smtp.your_email_provider.com",
+    "smtp_port": 587,
+    "smtp_username": "your_email@example.com",
+    "smtp_password": "your_email_password",
+    "email_from": "your_email@example.com",
+    "email_to": "recipient_email@example.com",
+    "email_subject": "PDF Files Older Than One Day",
+    "folder_path": "/path/to/your/folder"
+}

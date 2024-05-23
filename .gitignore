@@ -5,6 +5,8 @@
 /public_key.pem
 /build/
 /dist/
+.venv
+venv
 
 config.json
 
