@@ -116,17 +116,18 @@ def apimoduluspostrequest(token, doc, district, fileName, logFile, timeStamp):  
 
 
 if __name__ == '__main__':
-    dirsList = []
-    for dirs in os.scandir(workingDirectory):  # checking if directories Logs, Finished and Failed exists
-        if dirs.is_dir():
-            dirsList.append(str(dirs.name))
+    dirsList = [dirs.name for dirs in os.scandir(workingDirectory) if dirs.is_dir()]
 
-    if 'Logs' not in dirsList:  # if they do not exist, create them
-        os.mkdir(workingDirectory + 'Logs')
-    if 'Finished' not in dirsList:
-        os.mkdir(workingDirectory + 'Finished')
-    if 'Failed' not in dirsList:
-        os.mkdir(workingDirectory + 'Failed')
+    logs_dir = os.path.join(workingDirectory, 'Logs')
+    finished_dir = os.path.join(workingDirectory, 'Finished')
+    failed_dir = os.path.join(workingDirectory, 'Failed')
+
+    if not os.path.exists(logs_dir):  # Hvis katalogen ikke finnes, opprett den
+        os.makedirs(logs_dir)
+    if not os.path.exists(finished_dir):
+        os.makedirs(finished_dir)
+    if not os.path.exists(failed_dir):
+        os.makedirs(failed_dir)
 
     logger = log()  # generate logger and create/open logfile
     currentTime = datetime.now()
