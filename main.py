@@ -30,21 +30,17 @@ config = json.loads(configFile.read())
 workingDirectory = str(config['workingDirectory'])  # directory where scanned documents are found
 privateKeyFile = str(config['privateKeyFile'])  # private key file
 
-
 def readkey(fk):  # read private key function
     with open(fk, 'r') as f:
         return f.read()
-
 
 def log():  # logger creator/append function
     loggerDate = datetime.strftime(datetime.now(), '%Y-%m-%d')
     f = open(workingDirectory + 'Logs/' + loggerDate + '.log', 'a+')
     return f
 
-
 def userformatcheck(userName):  # username format validator function
     return userName.isalnum() and not userName.isalpha() and not userName.isdigit()
-
 
 def maskinporttokenpostrequest(logFile, timeStamp):  # creates JWT and requests access token from Maskinporten
     iat = datetime.now(tz=timezone.utc)
@@ -79,12 +75,19 @@ def maskinporttokenpostrequest(logFile, timeStamp):  # creates JWT and requests 
                          data=('grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=' + str(token)))
         r.close()
 
+        if r.status_code == 200:
+            logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + ' - Maskinporten token acquired successfully.\n')
+            print('Maskinporten token acquired successfully.')
+        else:
+            logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + f' - Failed to acquire Maskinporten token. Status code: {r.status_code}\n')
+            print(f'Failed to acquire Maskinporten token. Status code: {r.status_code}')
+
         return [r.status_code, r.json()]  # return response and json content
 
     except Exception as error:
-        logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + str(error))
+        logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + ' - Error acquiring Maskinporten token: ' + str(error) + '\n')
+        print('Error acquiring Maskinporten token:', str(error))
         sys.exit(-1)
-
 
 def apimoduluspostrequest(token, doc, district, fileName, logFile, timeStamp):  # push data to api with post-request
     if userformatcheck(fileName[0:5]):  # if username fits Bergen format, change to whatever format you use
@@ -106,16 +109,21 @@ def apimoduluspostrequest(token, doc, district, fileName, logFile, timeStamp):  
         r.close()
 
         if r.status_code == 204:  # response status code handling, api doesn't return json content if 204 success
+            logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + ' - File uploaded successfully: ' + fileName + '\n')
+            print('File uploaded successfully:', fileName)
             return {'code': '204'}
         else:  # return response json content for error handling
+            logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + ' - Failed to upload file: ' + fileName + ' - Response: ' + str(r.json()) + '\n')
+            print('Failed to upload file:', fileName, '- Response:', r.json())
             return r.json()
 
     except Exception as error:
-        logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + str(error))
+        logFile.write(datetime.strftime(timeStamp, '%Y-%m-%d %H:%M:%S') + ' - Error during API request: ' + str(error) + '\n')
+        print('Error during API request:', str(error))
         sys.exit(-1)
 
-
 if __name__ == '__main__':
+    #workingDirectory = '/path/to/your/working/directory/'  # Pass på å legge til skråstrek på slutten
     dirsList = [dirs.name for dirs in os.scandir(workingDirectory) if dirs.is_dir()]
 
     logs_dir = os.path.join(workingDirectory, 'Logs')
@@ -132,6 +140,7 @@ if __name__ == '__main__':
     logger = log()  # generate logger and create/open logfile
     currentTime = datetime.now()
     logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') + ' - Starting uploads...\n')
+    print('Starting uploads...')
 
     maskinToken = maskinporttokenpostrequest(logger, currentTime)  # request Maskinporten token
 
@@ -164,11 +173,13 @@ if __name__ == '__main__':
                                 shutil.move(file.path, str(workingDirectory + 'Finished/' + file.name))
                                 logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
                                              ' - ' + str(file.name) + ' successfully uploaded: ' + str(response) + '\n')
+                                print('Successfully uploaded:', str(file.name))
 
                             elif response['code'] == '400':  # log missing fields, move to failed
                                 shutil.move(file.path, str(workingDirectory + 'Failed/' + file.name))
                                 logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
                                              ' - ' + str(file.name) + ' failed with error: ' + str(response) + '\n')
+                                print('Failed with error 400:', str(file.name), '-', str(response))
 
                             elif response['code'] == '403':  # log invalid token, get new token and try again
                                 maskinToken = maskinporttokenpostrequest(logger, currentTime)
@@ -177,34 +188,40 @@ if __name__ == '__main__':
                                                                      currentTime)
                                 logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
                                              ' - Maskinporten token expired, retrying...\n')
+                                print('Maskinporten token expired, retrying...')
 
                                 if nextResponse['code'] == '204':  # log success, move to finished
                                     shutil.move(file.path, str(workingDirectory + 'Finished/' + file.name))
                                     logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
-                                                 ' - ' + str(file.name) + ' successfully uploaded: ' + str(
-                                        response) + '\n')
+                                                 ' - ' + str(file.name) + ' successfully uploaded: ' + str(response) + '\n')
+                                    print('Successfully uploaded after retry:', str(file.name))
 
                                 else:  # log failed, moved to failed
                                     shutil.move(file.path, str(workingDirectory + 'Failed/' + file.name))
                                     logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
-                                                 ' - ' + str(file.name) + ' failed with error: ' + str(response) + '\n')
+                                                 ' - ' + str(file.name) + ' failed with error after retry: ' + str(response) + '\n')
+                                    print('Failed after retry:', str(file.name), '-', str(response))
 
                             else:  # handle any other potential errors
                                 logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
                                              ' - ' + str(file.name) + ' failed with error: ' + str(response) + '\n')
+                                print('Failed with error:', str(file.name), '-', str(response))
                                 logger.close()
                                 sys.exit(-1)  # exiting, no point retrying if HTTP errors prevent communication
 
                         except OSError as e:
                             logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
-                                         ' - ' + str(file.name) + ' failed with error: ' + str(e) + '\n')
+                                         ' - ' + str(file.name) + ' failed with OSError: ' + str(e) + '\n')
+                            print('Failed with OSError:', str(file.name), '-', str(e))
 
         logger.write(datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S') + ' - Uploads done!\n')
+        print('Uploads done!')
         logger.close()
         sys.exit(0)
 
     else:  # failed to get token due to HTTP error
         logger.write(datetime.strftime(currentTime, '%Y-%m-%d %H:%M:%S') +
                      ' - Maskinporten token request failed with error: ' + str(maskinToken) + '\n')
+        print('Maskinporten token request failed with error:', str(maskinToken))
         logger.close()
         sys.exit(-1)  # exit with error code, no point in trying if token can't be requested
